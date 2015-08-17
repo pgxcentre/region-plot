@@ -1,9 +1,8 @@
-# region-plot - A post GWAS bioinformatics pipeline
+# region-plot - A tool to plot significant regions of GWAS
 
-*Version 0.1*
-
-`region-plot` is an automatic post-GWAS bioinformatics pipeline. It works on both
-Python 2 and 3 versions.
+`region-plot` is a bioinformatics pipeline to plot significant regions found by
+genome-wide association studies (GWAS). It works on both Python 2 and 3
+versions.
 
 The following figure (low resolution) is an example from Tardif *et al.* (2015)
 (doi:[10.1161/CIRCGENETICS.114.000663](http://dx.doi.org/10.1161/CIRCGENETICS.114.000663)).
@@ -37,11 +36,11 @@ usage: launch-region-plot [-h] [-v] [--log-level {INFO,DEBUG}]
                           [--imputed-sites FILE] [--significant FLOAT]
                           [--plot-p-lower FLOAT] [--snp-col COL]
                           [--chr-col COL] [--pos-col COL] [--p-col COL]
-                          [--plot-format {png,pdf}] --genetic-map FILE
+                          [--plot-format {pdf,png}] --genetic-map FILE
                           [--build {GRCh37,GRCh38}] [--region-padding FLOAT]
                           [--whole-dataset]
 
-Execute the genome-wide imputation pipeline (version 0.1.0).
+Plots significant regions of GWAS.
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -66,7 +65,7 @@ Association Options:
   --p-col COL           The name of the p-value column [p]
 
 Plot Options:
-  --plot-format {png,pdf}
+  --plot-format {pdf,png}
                         The format of the output file containing the plot
                         (might be 'png' or 'pdf') [png]
   --genetic-map FILE    The file containing the genetic map

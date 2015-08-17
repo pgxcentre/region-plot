@@ -40,7 +40,7 @@ def setup_package():
     setup(
         name="region-plot",
         version=VERSION,
-        description="Post GWAS bioinformatics analysis.",
+        description="Plots significant regions of GWAS.",
         author="Louis-Philippe Lemieux Perreault",
         author_email="louis-philippe.lemieux.perreault@statgen.org",
         url="http://www.statgen.org",

@@ -39,8 +39,7 @@ def main():
 
     """
     # Creating the option parser
-    desc = ("Execute the genome-wide imputation pipeline "
-            "(version {}).".format(__version__))
+    desc = "Plots significant regions of GWAS.".format(__version__)
     parser = argparse.ArgumentParser(description=desc)
 
     # We run the script
