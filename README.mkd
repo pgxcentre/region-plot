@@ -3,10 +3,9 @@
 *Version 0.1*
 
 `region-plot` is an automatic post-GWAS bioinformatics pipeline. It works on both
-Python 2 and 3 versions. It will generate the following figure for all regions
-containing a marker with a certain significance value.
+Python 2 and 3 versions.
 
-The following figure is an example from Tardif *et al.* (2015)
+The following figure (low resolution) is an example from Tardif *et al.* (2015)
 (doi:[10.1161/CIRCGENETICS.114.000663](http://dx.doi.org/10.1161/CIRCGENETICS.114.000663)).
 The difference with the original figure is the inclusion of the annotation from
 the HAVANA project in this example.
