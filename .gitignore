@@ -5,6 +5,6 @@ build
 *.egg-info
 conda_dist
 
-post_gwas/version.py
+region_plot/version.py
 
 test
