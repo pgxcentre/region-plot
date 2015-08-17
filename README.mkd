@@ -1,0 +1,37 @@
+# region-plot - A post GWAS bioinformatics pipeline
+
+*Version 0.1*
+
+`region-plot` is an automatic post-GWAS bioinformatics pipeline. It works on both
+Python 2 and 3 versions. It will generate the following figure for all regions
+containing a marker with a certain significance value.
+
+The following figure is an example from Tardif *et al.* (2015)
+(doi:[10.1161/CIRCGENETICS.114.000663](http://dx.doi.org/10.1161/CIRCGENETICS.114.000663)).
+The difference with the original figure is the inclusion of the annotation from
+the HAVANA project in this example.
+
+<img src=https://raw.github.com/pgxcentre/region-plot/master/example.png width=350 />
+
+
+## Dependencies
+
+The tool requires a standard [Python](http://python.org/) installation with the
+following packages:
+
+1. [numpy](http://www.numpy.org/) version 1.9.1 or latest
+2. [pandas](http://pandas.pydata.org/) version 0.15.0 or latest
+
+The tool has been tested on *Linux* only, but should also work on both Mac OSX
+and Windows.
+
+
+## Usage
+
+For Linux users, make sure that the script is executable (using the *chmod*
+command).
+
+```console
+$ 
+```
+

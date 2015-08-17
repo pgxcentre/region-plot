@@ -1,0 +1,10 @@
+*.pyc
+*.swp
+dist
+build
+*.egg-info
+conda_dist
+
+post_gwas/version.py
+
+test
