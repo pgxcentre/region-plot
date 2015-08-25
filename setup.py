@@ -51,6 +51,8 @@ def setup_package():
             ],
         },
         packages=["region_plot"],
+        package_data={"region_plot": ["templates/*.html", "static/js/*.js",
+                                      "static/css/*.css"]},
         install_requires=["numpy >= 1.9.1", "pandas >= 0.15.0", "six >= 1.9.0",
                           "matplotlib >= 1.4.3", "gepyto >= 0.9.2"],
         classifiers=[
