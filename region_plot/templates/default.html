@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+
+    <title>Region Plot</title>
+    <meta charset="UTF-8">
+
+    <!-- jQuery //-->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+
+    <!-- D3 //-->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.6/d3.min.js"></script>
+
+    <!-- Bootstrap -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+
+    <style>
+      {{ scatter_plot_style|indent(6, True) }}
+    </style>
+
+  </head>
+
+
+  <body>
+
+    <!-- The data (as JSON) //-->
+    <script>
+      var imputedData = {{ imputed_data }},
+          genotypedData = {{ genotyped_data }};
+    </script>
+
+    <div id="main_chart", class="plot">
+      <div id="scatter"></div>
+      <div id="scatterlegend"></div>
+    </div>
+
+    <script>
+      {{ main_js|indent(6, True) }}
+    </script>
+
+  </body>
+
+</html>

@@ -1,0 +1,112 @@
+
+/* The axis */
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: black;
+  shape-rendering: crispEdges;
+}
+
+.axis text {
+  font-family: sans-serif;
+  font-size: 11px;
+}
+
+
+/* The imputed point colors (for specific range) */
+
+.point.lower_02.imputed {
+  fill: #8AD5F0;
+}
+
+.point.lower_04.imputed {
+  fill: #D6ADEB;
+}
+
+.point.lower_06.imputed {
+  fill: #C5E26D;
+}
+
+.point.lower_08.imputed {
+  fill: #FFD980;
+}
+
+.point.lower_1.imputed {
+  fill: #FF9494;
+}
+
+
+/* The genotyped point colors (for specific range) */
+
+.point.lower_02.genotyped {
+  fill: #0099CC;
+}
+
+.point.lower_04.genotyped {
+  fill: #9933CC;
+}
+
+.point.lower_06.genotyped {
+  fill: #669900;
+}
+
+.point.lower_08.genotyped {
+  fill: #FF8800;
+}
+
+.point.lower_1.genotyped {
+  fill: #CC0000;
+}
+
+
+/* The legend style */
+
+#scatterlegend {
+  position: absolute;
+  top: 0px;
+  right: 0px;
+  width: 300px;
+  height: 150px;
+}
+
+
+/* The legend point style */
+
+.legend.shape.imputed {
+  fill: #8F8F8F;
+}
+
+.legend.shape.genotyped {
+  fill: #000000;
+}
+
+.legend.rectangle {
+  stroke-width: 6;
+}
+
+.legend.rectangle.lower_02 {
+  fill: #8AD5F0;
+  stroke: #0099CC;
+}
+
+.legend.rectangle.lower_04 {
+  fill: #D6ADEB;
+  stroke: #9933CC;
+}
+
+.legend.rectangle.lower_06 {
+  fill: #C5E26D;
+  stroke: #669900;
+}
+
+.legend.rectangle.lower_08 {
+  fill: #FFD980;
+  stroke: #FF8800;
+}
+
+.legend.rectangle.lower_1 {
+  fill: #FF9494;
+  stroke: #CC0000;
+}
+

@@ -12,6 +12,7 @@ from __future__ import print_function
 
 import os
 import sys
+import json
 import logging
 import argparse
 from collections import defaultdict
@@ -27,6 +28,18 @@ from gepyto.utils.genes import ensembl_genes_in_region
 from . import utils
 from . import __version__
 from .error import ProgramError
+
+try:
+    import jinja2
+    HAS_JINJA2 = True
+except ImportError:
+    HAS_JINJA2 = False
+
+try:
+    from pkg_resources import resource_filename
+    HAS_PGK_RESOURCES = True
+except ImportError:
+    HAS_PGK_RESOURCES = False
 
 
 def main():
@@ -81,8 +94,22 @@ def main():
             gene_list = find_gene_in_region(chrom, start, end, args.build)
 
             # Plotting the region
-            plot_region(best_hit, assoc, ld, genetic_map, imputed_sites, chrom,
-                        start, end, gene_list, args)
+            plotting_function = plot_region
+            if args.plot_format == "html":
+                plotting_function = plot_html_region
+
+            plotting_function(
+                best=best_hit,
+                assoc=assoc,
+                ld=ld,
+                genetic_map=genetic_map,
+                imputed_sites=imputed_sites,
+                chrom=chrom,
+                start=start,
+                end=end,
+                genes=gene_list,
+                options=args,
+            )
 
     # Catching the Ctrl^C
     except KeyboardInterrupt:
@@ -375,6 +402,120 @@ def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
     plt.close(fig)
 
 
+def plot_html_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start,
+                     end, genes, options):
+    """Plots the genomic region in HTML format."""
+    # Merging the association data with the LD values
+    assoc = assoc.merge(ld.set_index("SNP_B"), left_index=True,
+                        right_index=True).rename(columns={"R2": "ld"})
+
+    # Adding information to the data
+    assoc["type"] = "genotyped"
+    assoc.loc[assoc.index.isin(imputed_sites), "type"] = "imputed"
+    assoc["type"] = assoc["type"].astype("category")
+
+    # Setting null values to zero
+    assoc.loc[assoc.ld.isnull(), "ld"] = 0
+
+    # Computing assoc values
+    assoc["assoc"] = -np.log10(assoc[options.p_col])
+
+    # Renaming columns so that we can easily use them in the script
+    assoc = assoc.rename(columns={
+        options.pos_col: "pos",
+        options.chr_col: "chrom",
+        options.snp_col: "snp",
+        options.p_col: "p",
+    })
+
+    # The R threshold
+    r_thresholds = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
+    r_names = ("lower_0", "lower_02", "lower_04", "lower_06", "lower_08",
+               "lower_1")
+
+    # The colors
+    r_colors = ("#0099CC", "#9933CC", "#669900", "#FF8800", "#CC0000")
+    i_r_colors = ("#8AD5F0", "#D6ADEB", "#C5E26D", "#FFD980", "#FF9494")
+
+    # Setting the color
+    assoc["color"] = "#000000"
+    assoc["range"] = ""
+    genotyped = assoc["type"] == "genotyped"
+    imputed = assoc["type"] == "imputed"
+    for i in range(1, len(r_thresholds)):
+        min_r = r_thresholds[i-1]
+        max_r = r_thresholds[i]
+
+        # The markers that pass the threshold
+        pass_r = (min_r < assoc.ld) & (assoc.ld <= max_r)
+
+        # Changing color
+        assoc.loc[genotyped & pass_r, "color"] = r_colors[i - 1]
+        assoc.loc[imputed & pass_r, "color"] = i_r_colors[i - 1]
+
+        # Changing the range
+        assoc.loc[pass_r, "range"] = r_names[i]
+
+    # Setting as category
+    assoc["color"] = assoc["color"].astype("category")
+    assoc["range"] = assoc["range"].astype("category")
+
+    # Keeping only the required columns to save space
+    assoc = assoc[["chrom", "pos", "snp", "assoc", "ld", "range", "type", "p"]]
+
+    # Saving to json for the imputed data
+    imputed_json = []
+    for value in assoc[imputed].sort("ld").reset_index().iterrows():
+        imputed_json.append(value[1].to_dict())
+    imputed_json = json.dumps(imputed_json)
+
+    # Saving the json for the genotyped data
+    genotyped_json = []
+    for value in assoc[genotyped].sort("ld").reset_index().iterrows():
+        genotyped_json.append(value[1].to_dict())
+    genotyped_json = json.dumps(genotyped_json)
+
+    # Getting the Jinja2 environment
+    jinja2_template = jinja2.Environment(
+        loader=jinja2.PackageLoader(__name__, "templates"),
+    )
+    jinja2_static = jinja2.Environment(
+        loader=jinja2.PackageLoader(__name__, "static"),
+    )
+
+    # Getting the css template
+    css_template = jinja2_static.get_template("css/scatter_plot.css")
+    css_content = {}
+
+    # Getting the js template
+    js_template = jinja2_static.get_template("js/region_plot.js")
+
+    # The js template content
+    js_content = {
+        "chrom": chrom,
+        "start": start,
+        "end": end,
+        "assoc_max": assoc["assoc"].max(),
+    }
+
+    # Getting the main template
+    main_template = jinja2_template.get_template("default.html")
+
+    # The main template content
+    main_content = {
+        "imputed_data": imputed_json,
+        "genotyped_data": genotyped_json,
+        "main_js": js_template.render(**js_content),
+        "scatter_plot_style": css_template.render(**css_content),
+    }
+
+    # Writing the final file
+    o_filename = "chr{}_{}-{}.{}".format(chrom, start, end,
+                                         options.plot_format)
+    with open(o_filename, "w") as o_file:
+        print(main_template.render(**main_content), file=o_file)
+
+
 def read_assoc(filename, options):
     """Reads the association file."""
     # Reading the assoc file
@@ -498,7 +639,8 @@ def compute_ld(prefix, assoc, best_hit, chrom, start, end, args):
     ]
 
     # Launching the command
-    if utils.execute_command("PLINK: LD with {}".format(best_hit), command):
+    # if utils.execute_command("PLINK: LD with {}".format(best_hit), command):
+    if True:
         # The task was successful, so we read the LD table
         filename = "{}.ld".format(best_hit)
         if not os.path.isfile(filename):
@@ -580,6 +722,16 @@ def check_args(args):
     # Does the log file ends with '.log'?
     if not args.log_file.endswith(".log"):
         args.log_file += ".log"
+
+    # Checking we can create the HTML format
+    if args.plot_format == "html":
+        if not HAS_JINJA2:
+            raise ProgramError("HTML format requires Jinja2: Jinja2 not "
+                               "available, install it")
+
+        if not HAS_PGK_RESOURCES:
+            raise ProgramError("HTML format requires setuptools: setuptools "
+                               "not available, install it")
 
     return True
 
@@ -681,10 +833,10 @@ def parse_args(parser):
     group.add_argument(
         "--plot-format",
         type=str,
-        choices={"png", "pdf"},
+        choices={"png", "pdf", "html"},
         default="png",
         help="The format of the output file containing the plot (might be "
-             "'png' or 'pdf') [%(default)s]",
+             "'png', 'pdf' or 'html') [%(default)s]",
     )
     group.add_argument(
         "--genetic-map",
