@@ -278,7 +278,7 @@ def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
                      markerscale=1)
 
     # Sorting the genes
-    genes = genes.sort(columns=["start", "end"])
+    genes = genes.sort_values(by=["start", "end"])
 
     # Getting the figure renderer
     renderer = fig.canvas.get_renderer()

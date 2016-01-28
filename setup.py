@@ -51,7 +51,7 @@ def setup_package():
             ],
         },
         packages=["region_plot"],
-        install_requires=["numpy >= 1.9.1", "pandas >= 0.15.0", "six >= 1.9.0",
+        install_requires=["numpy >= 1.9.1", "pandas >= 0.17.0", "six >= 1.9.0",
                           "matplotlib >= 1.4.3", "gepyto >= 0.9.2"],
         classifiers=[
             "Intended Audience :: Science/Research",
