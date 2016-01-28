@@ -639,8 +639,7 @@ def compute_ld(prefix, assoc, best_hit, chrom, start, end, args):
     ]
 
     # Launching the command
-    # if utils.execute_command("PLINK: LD with {}".format(best_hit), command):
-    if True:
+    if utils.execute_command("PLINK: LD with {}".format(best_hit), command):
         # The task was successful, so we read the LD table
         filename = "{}.ld".format(best_hit)
         if not os.path.isfile(filename):
@@ -833,7 +832,7 @@ def parse_args(parser):
     group.add_argument(
         "--plot-format",
         type=str,
-        choices={"png", "pdf", "html"},
+        choices={"png", "pdf", "html", "svg"},
         default="png",
         help="The format of the output file containing the plot (might be "
              "'png', 'pdf' or 'html') [%(default)s]",
