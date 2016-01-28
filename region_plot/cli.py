@@ -228,7 +228,8 @@ def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
         if len(sub_data) > 0:
             assoc_axe.plot(sub_data[options.pos_col] / 1e6,
                            -np.log10(sub_data[options.p_col]),
-                           "D", mec=color, mfc=color, ms=3, clip_on=False)
+                           "D", mec=color, mfc=color, ms=3, clip_on=False,
+                           label="_nolegend_")
 
     # Plotting the genotyped markers
     genotyped = data[~is_imputed]
@@ -249,7 +250,8 @@ def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
         if len(sub_data) > 0:
             assoc_axe.plot(sub_data[options.pos_col] / 1e6,
                            -np.log10(sub_data[options.p_col]),
-                           ".", mec=color, mfc=color, ms=6, clip_on=False)
+                           ".", mec=color, mfc=color, ms=6, clip_on=False,
+                           label="_nolegend_")
 
     # Adding the significant line
     assoc_axe.axhline(-np.log10(options.significant), ls="--", color="#000000",
