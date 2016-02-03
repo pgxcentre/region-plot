@@ -72,7 +72,8 @@ def main():
 
             # To read the genetic map, we required the chromosomal position of
             # the best hit
-            genetic_map = read_genetic_map(chrom, start, end, args.genetic_map)
+            genetic_map = read_genetic_map(chrom, start, end, args.genetic_map,
+                                           args)
 
             # Reading the imputed sites
             imputed_sites = read_imputed_sites(args.imputed_sites)
@@ -204,8 +205,8 @@ def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
                           weight="normal", rotation=270, va="bottom")
 
     # Plotting the recombination rate
-    recomb_axe.plot(genetic_map["Position(bp)"] / 1e6,
-                    genetic_map["Rate(cM/Mb)"],
+    recomb_axe.plot(genetic_map[options.genetic_pos_col] / 1e6,
+                    genetic_map[options.genetic_rate_col],
                     "-", lw=1, color="black", clip_on=False)
 
     # Plotting the imputed markers first
@@ -254,8 +255,8 @@ def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
                            label="_nolegend_")
 
     # Adding the significant line
-    assoc_axe.axhline(-np.log10(options.significant), ls="--", color="#000000",
-                      lw=1)
+    assoc_axe.axhline(-np.log10(options.significant), ls="--",
+                      color="#000000", lw=1)
 
     # Do we need a legend for the assoc axe?
     if len(imputed_sites) > 0:
@@ -514,7 +515,7 @@ def compute_ld(prefix, assoc, best_hit, chrom, start, end, args):
         return ld_data
 
 
-def read_genetic_map(chrom, start, stop, filename):
+def read_genetic_map(chrom, start, stop, filename, options):
     """Reads the genetic map."""
     compression = None
     if filename.endswith(".gz"):
@@ -522,6 +523,14 @@ def read_genetic_map(chrom, start, stop, filename):
 
     logging.info("Reading genetic map '{}'".format(filename))
     data = pd.read_csv(filename, sep="\t", compression=compression)
+
+    # Checking the column
+    for column in (options.genetic_chr_col, options.genetic_pos_col,
+                   options.genetic_rate_col):
+        if column not in data.columns:
+            logging.debug(data.columns)
+            raise ProgramError("{}: no column named {}".format(filename,
+                                                               column))
 
     # Sub-setting the data to get a region of X base pair on each side of the
     # hit
@@ -678,6 +687,39 @@ def parse_args(parser):
         help="The name of the p-value column [%(default)s]",
     )
 
+    # The genetic map option
+    group = parser.add_argument_group("Genetic Map Options")
+    group.add_argument(
+        "--genetic-map",
+        type=str,
+        metavar="FILE",
+        required=True,
+        help="The file containing the genetic map",
+    )
+    group.add_argument(
+        "--genetic-chr-col",
+        type=str,
+        metavar="COL",
+        default="chromosome",
+        help="The name of chromosome column for the genetic map [%(default)s]",
+    )
+    group.add_argument(
+        "--genetic-pos-col",
+        type=str,
+        metavar="COL",
+        default="position",
+        help="The name of the position column for the genetic map "
+             "[%(default)s]",
+    )
+    group.add_argument(
+        "--genetic-rate-col",
+        type=str,
+        metavar="COL",
+        default="rate",
+        help="The name of the recombination rate column for the genetic map "
+             "[%(default)s]",
+    )
+
     # The plot options
     group = parser.add_argument_group("Plot Options")
     group.add_argument(
@@ -687,13 +729,6 @@ def parse_args(parser):
         default="png",
         help="The format of the output file containing the plot (might be "
              "'png' or 'pdf') [%(default)s]",
-    )
-    group.add_argument(
-        "--genetic-map",
-        type=str,
-        metavar="FILE",
-        required=True,
-        help="The file containing the genetic map",
     )
     group.add_argument(
         "--build",
@@ -713,7 +748,8 @@ def parse_args(parser):
     group.add_argument(
         "--whole-dataset",
         action="store_true",
-        help="Plot all markers (no padding)",
+        help="Plot all markers (no padding) (WARNING this might take a lot of "
+             "memory)",
     )
 
     return parser.parse_args()
