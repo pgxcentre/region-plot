@@ -18,7 +18,7 @@ The tool requires a standard [Python](http://python.org/) installation with the
 following packages:
 
 1. [numpy](http://www.numpy.org/) version 1.9.1 or latest
-2. [pandas](http://pandas.pydata.org/) version 0.15.0 or latest
+2. [pandas](http://pandas.pydata.org/) version 0.17.0 or latest
 3. [six](http://pythonhosted.org/six/) version 1.9.0 or latest
 4. [matplotlib](http://matplotlib.org/) version 1.4.3 or latest
 5. [gepyto](https://github.com/legaultmarc/gepyto) version 0.9.2 or latest
@@ -39,9 +39,10 @@ usage: launch-region-plot [-h] [-v] [--log-level {INFO,DEBUG}]
                           [--imputed-sites FILE] [--significant FLOAT]
                           [--plot-p-lower FLOAT] [--snp-col COL]
                           [--chr-col COL] [--pos-col COL] [--p-col COL]
-                          [--plot-format {pdf,png}] --genetic-map FILE
-                          [--build {GRCh37,GRCh38}] [--region-padding FLOAT]
-                          [--whole-dataset]
+                          --genetic-map FILE [--genetic-chr-col COL]
+                          [--genetic-pos-col COL] [--genetic-rate-col COL]
+                          [--plot-format {png,pdf}] [--build {GRCh37,GRCh38}]
+                          [--region-padding FLOAT] [--whole-dataset]
 
 Plots significant regions of GWAS.
 
@@ -67,16 +68,28 @@ Association Options:
   --pos-col COL         The name of the pos column [pos]
   --p-col COL           The name of the p-value column [p]
 
+Genetic Map Options:
+  --genetic-map FILE    The file containing the genetic map
+  --genetic-chr-col COL
+                        The name of chromosome column for the genetic map
+                        [chromosome]
+  --genetic-pos-col COL
+                        The name of the position column for the genetic map
+                        [position]
+  --genetic-rate-col COL
+                        The name of the recombination rate column for the
+                        genetic map [rate]
+
 Plot Options:
-  --plot-format {pdf,png}
+  --plot-format {png,pdf}
                         The format of the output file containing the plot
                         (might be 'png' or 'pdf') [png]
-  --genetic-map FILE    The file containing the genetic map
   --build {GRCh37,GRCh38}
                         The build to search the overlapping genes [GRCh37]
   --region-padding FLOAT
                         The amount of base pairs to pad the region (on each
                         side of the best hit [500000.0]
-  --whole-dataset       Plot all markers (no padding)
+  --whole-dataset       Plot all markers (no padding) (WARNING this might take
+                        a lot of memory)
 ```
 
