@@ -18,7 +18,6 @@ from collections import defaultdict
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 from six.moves import range, zip
 
@@ -27,6 +26,11 @@ from gepyto.utils.genes import ensembl_genes_in_region
 from . import utils
 from . import __version__
 from .error import ProgramError
+
+# importing matplotlib so that it works even if no X11
+import matplotlib as mpl
+mpl.use("Agg")
+import matplotlib.pyplot as plt
 
 
 def main():
