@@ -55,8 +55,11 @@ def main():
             format="[%(asctime)s %(levelname)s] %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
             level=args.log_level,
-            handlers=[logging.StreamHandler(),
-                      logging.FileHandler(args.log_file, mode="w")]
+            handlers=[
+                logging.StreamHandler(),
+                logging.FileHandler(os.path.join(args.output_directory,
+                                                 args.log_file), mode="w"),
+            ]
         )
         logging.info("Logging everything into '{}'".format(args.log_file))
 
@@ -81,7 +84,8 @@ def main():
             imputed_sites = read_imputed_sites(args.imputed_sites)
 
             # Getting the gene from the region
-            gene_list = find_gene_in_region(chrom, start, end, args.build)
+            gene_list = find_gene_in_region(chrom, start, end, args.build,
+                                            args.output_directory)
 
             # Plotting the region
             plot_region(best_hit, assoc, ld, genetic_map, imputed_sites, chrom,
@@ -97,7 +101,7 @@ def main():
         parser.error(e.message)
 
 
-def find_gene_in_region(chrom, start, end, build):
+def find_gene_in_region(chrom, start, end, build, out_dir):
     """Finds the gene in the region."""
     region = "{}:{}-{}".format(chrom, start, end)
 
@@ -115,8 +119,10 @@ def find_gene_in_region(chrom, start, end, build):
                                          "biotype"])
 
     # Saving the gene list
-    genes.to_csv("genes_in_chr{}_{}_{}.txt".format(chrom, start, end),
-                 sep="\t", index=False)
+    fn = os.path.join(
+        out_dir, "genes_in_chr{}_{}_{}.txt".format(chrom, start, end),
+    )
+    genes.to_csv(fn, sep="\t", index=False)
 
     return genes
 
@@ -375,6 +381,7 @@ def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
     # Saving the figure
     o_filename = "chr{}_{}-{}.{}".format(chrom, start, end,
                                          options.plot_format)
+    o_filename = os.path.join(options.output_directory, o_filename)
     logging.info("  - saving to '{}'".format(o_filename))
     plt.savefig(o_filename, dpi=600, bbox_inches='tight')
     plt.close(fig)
@@ -499,13 +506,15 @@ def compute_ld(prefix, assoc, best_hit, chrom, start, end, args):
         "--ld-window-kb", "1000000",
         "--ld-window", "1000000",
         "--ld-window-r2", "0",
-        "--out", best_hit,
+        "--out", os.path.join(args.output_directory, best_hit),
     ]
 
     # Launching the command
     if utils.execute_command("PLINK: LD with {}".format(best_hit), command):
         # The task was successful, so we read the LD table
-        filename = "{}.ld".format(best_hit)
+        filename = os.path.join(
+            args.output_directory, "{}.ld".format(best_hit)
+        )
         if not os.path.isfile(filename):
             raise ProgramError("{}: file wasn't produce by "
                                "plink".format(filename))
@@ -752,6 +761,13 @@ def parse_args(parser):
         action="store_true",
         help="Plot all markers (no padding) (WARNING this might take a lot of "
              "memory)",
+    )
+
+    # The output options
+    group = parser.add_argument_group("Output Options")
+    group.add_argument(
+        "--output-directory", metavar="DIR", default=".",
+        help="The output directory [%(default)s]",
     )
 
     return parser.parse_args()
