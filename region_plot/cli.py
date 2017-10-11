@@ -28,8 +28,6 @@ from . import __version__
 from .error import ProgramError
 
 # importing matplotlib so that it works even if no X11
-import matplotlib as mpl
-mpl.use("Agg")
 import matplotlib.pyplot as plt
 
 
