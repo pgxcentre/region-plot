@@ -10,8 +10,6 @@
 import logging
 from subprocess import Popen, PIPE
 
-from .error import ProgramError
-
 
 def execute_command(name, command):
     """Executes a single command."""
