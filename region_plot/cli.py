@@ -372,8 +372,8 @@ def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
 
     # The gene limits should at least be lower than -1
     min_y, max_y = gene_axe.get_ylim()
-    if min_y == -1:
-        gene_axe.set_ylim(-1.5, max_y)
+    if min_y >= -1:
+        gene_axe.set_ylim(-1, max_y)
 
     # Setting the ticks below the X axis for genes
     gene_axe.get_xaxis().set_tick_params(direction='out')
