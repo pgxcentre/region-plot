@@ -52,7 +52,8 @@ def setup_package():
         },
         packages=["region_plot"],
         install_requires=["numpy >= 1.9.1", "pandas >= 0.17.0", "six >= 1.9.0",
-                          "matplotlib >= 1.4.3", "gepyto >= 0.9.2"],
+                          "matplotlib >= 1.4.3", "gepyto >= 0.9.2",
+                          "geneparse >= 0.7.0"],
         classifiers=[
             "Intended Audience :: Science/Research",
             "License :: Free for non-commercial use",
