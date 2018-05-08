@@ -702,12 +702,14 @@ def parse_args(parser):
         help="The name of the p-value column. [%(default)s]",
     )
     group.add_argument(
-        "--a1-col", type=str, metavar="ALLELE",
-        help="The name of the column containing the first allele.",
+        "--a1-col", type=str, metavar="ALLELE", default="minor",
+        help="The name of the column containing the first allele. "
+             "[%(default)s]",
     )
     group.add_argument(
-        "--a2-col", type=str, metavar="ALLELE",
-        help="The name of the column containing the second allele.",
+        "--a2-col", type=str, metavar="ALLELE", default="major",
+        help="The name of the column containing the second allele. "
+             "[%(default)s]",
     )
 
     # The genetic map option
