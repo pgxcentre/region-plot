@@ -69,6 +69,13 @@ def main():
         # Getting the best hit
         best_hits = get_best_hits(assoc, args)
 
+        # Reading the samples to keep
+        samples_to_keep = None
+        if args.keep is not None:
+            samples_to_keep = set(args.keep.read().splitlines())
+            logging.info("Keeping {:,d} samples".format(len(samples_to_keep)))
+            args.keep.close()
+
         # For all hits...
         for best_hit, chrom, start, end in zip(*best_hits):
             # Extracting the region
@@ -82,8 +89,11 @@ def main():
 
             # Computing LD with best hit
             ld = compute_ld(
-                args.genotypes, original_name,
-                set(in_region[args.snp_col].values), args,
+                genotypes_file=args.genotypes,
+                best_hit=original_name,
+                markers=set(in_region[args.snp_col].values),
+                keep=samples_to_keep,
+                args=args,
             )
 
             # To read the genetic map, we required the chromosomal position of
@@ -516,13 +526,13 @@ def get_best_hits(assoc, args):
     return best_hits, chroms, starts, ends
 
 
-def compute_ld(genotypes_file, best_hit, markers, args):
+def compute_ld(genotypes_file, best_hit, markers, keep, args):
     """Compute LD with the best SNP."""
     logging.info("Computing LD")
     logging.info("  - {:,d} markers to fetch".format(len(markers)))
 
     ld = utils.compute_ld(
-        best_hit, genotypes_file, args.genotypes_format, args.keep, markers
+        best_hit, genotypes_file, args.genotypes_format, keep, markers
     )
 
     # Are there any duplicates?

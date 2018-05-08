@@ -24,13 +24,8 @@ from .error import ProgramError
 logger = logging.getLogger(__name__)
 
 
-def compute_ld(best, fn, f_format, keep, extract):
+def compute_ld(best, fn, f_format, samples_to_keep, extract):
     """Compute the LD."""
-    # Retrieving the 'keep' list
-    samples_to_keep = None
-    if keep is not None:
-        samples_to_keep = set(keep.read().splitlines())
-
     # The r2 values
     r2 = pd.Series()
 
