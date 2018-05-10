@@ -250,9 +250,10 @@ def plot_region(data, ld, genetic_map, imputed_sites, chrom, start, end,
 
         # Plotting the correct threshold
         sub_data = imputed[(min_r < imputed.r2) & (imputed.r2 <= max_r)]
-        logging.info("    - {:,d} with r2 <= {}".format(len(sub_data), max_r))
+        logging.info("    - {:,d} with r2 <= {}"
+                     "".format(sub_data.shape[0], max_r))
 
-        if len(sub_data) > 0:
+        if sub_data.shape[0] > 0:
             assoc_axe.plot(
                 sub_data[options.pos_col] / 1e6,
                 -np.log10(sub_data[options.p_col]),
@@ -278,9 +279,10 @@ def plot_region(data, ld, genetic_map, imputed_sites, chrom, start, end,
 
         # Plotting the correct threshold
         sub_data = genotyped[(min_r < genotyped.r2) & (genotyped.r2 <= max_r)]
-        logging.info("    - {:,d} with r2 <= {}".format(len(sub_data), max_r))
+        logging.info("    - {:,d} with r2 <= {}"
+                     "".format(sub_data.shape[0], max_r))
 
-        if len(sub_data) > 0:
+        if sub_data.shape[0] > 0:
             assoc_axe.plot(
                 sub_data[options.pos_col] / 1e6,
                 -np.log10(sub_data[options.p_col]),
