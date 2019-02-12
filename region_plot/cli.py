@@ -552,7 +552,7 @@ def compute_ld(genotypes_file, best_hit, markers, keep, args):
     # Saving the LD data
     fn = os.path.join(args.output_directory, "{}.ld.csv".format(best_hit))
     logging.info("  - saving LD values to {}".format(fn))
-    ld.to_csv(fn)
+    ld.to_csv(fn, header=False)
 
     return ld
 
