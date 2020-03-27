@@ -1,3 +1,4 @@
+"""Utility functions."""
 
 # This file is part of region-plot.
 #
@@ -27,17 +28,17 @@ logger = logging.getLogger(__name__)
 def compute_ld(best, fn, f_format, samples_to_keep, extract):
     """Compute the LD."""
     # The r2 values
-    r2 = pd.Series()
+    r_squared = pd.Series(dtype=float)
 
     # Creating the parser
-    GenoParser, geno_opts = _get_genotype_parser(fn, f_format)
-    logger.debug("parser: {}".format(str(GenoParser)))
-    logger.debug("geno_opts: {}".format(str(geno_opts)))
-    with GenoParser(**geno_opts) as parser:
+    geno_parser, geno_opts = _get_genotype_parser(fn, f_format)
+    logger.debug("parser: %s", str(geno_parser))
+    logger.debug("geno_opts: %s", str(geno_opts))
+    with geno_parser(**geno_opts) as parser:
         # The mapping info for the sample to keep
         samples = np.array(parser.get_samples(), dtype=str)
-        k = _get_sample_select(samples=samples, keep=samples_to_keep)
-        logger.debug("{} samples".format(np.sum(k)))
+        keep = _get_sample_select(samples=samples, keep=samples_to_keep)
+        logger.debug("%d samples", np.sum(keep))
 
         # Getting the best hit
         best_hit = parser.get_variant_by_name(best)
@@ -45,7 +46,7 @@ def compute_ld(best, fn, f_format, samples_to_keep, extract):
             raise ProgramError("There are {:,d} markers named {}"
                                "".format(len(best_hit), best))
         best_hit = best_hit.pop()
-        best_hit.genotypes = best_hit.genotypes[k]
+        best_hit.genotypes = best_hit.genotypes[keep]
 
         # Estimating the number of markers to get at a time to not go over 2G
         # of RAM (approximately)
@@ -56,12 +57,16 @@ def compute_ld(best, fn, f_format, samples_to_keep, extract):
                      "".format(nb_markers))
 
         # Computing the LD per chunks of n markers
-        for markers in get_n_markers(Extractor(parser, names=extract), k,
+        for markers in get_n_markers(Extractor(parser, names=extract), keep,
                                      nb_markers):
-            r2 = r2.append(geneparse_ld(best_hit, markers, r2=True))
-            logger.info("  - {:,d} markers processed".format(r2.shape[0]))
+            r_squared = r_squared.append(
+                geneparse_ld(best_hit, markers, r2=True),
+            )
+            logger.info(
+                "  - {:,d} markers processed".format(r_squared.shape[0]),
+            )
 
-    return r2
+    return r_squared
 
 
 def get_n_markers(parser, keep, n):
@@ -70,15 +75,15 @@ def get_n_markers(parser, keep, n):
     markers_in_region = []
 
     # Parsing the genotypes
-    for g in parser.iter_genotypes():
+    for data in parser.iter_genotypes():
         # Changing the name of the variants so that it includes the alleles
-        g.variant.name = "{}:{}/{}".format(
-            g.variant.name, *sorted([g.reference, g.coded]),
+        data.variant.name = "{}:{}/{}".format(
+            data.variant.name, *sorted([data.reference, data.coded]),
         )
 
         # Getting the genotypes
-        g.genotypes = g.genotypes[keep]
-        markers_in_region.append(g)
+        data.genotypes = data.genotypes[keep]
+        markers_in_region.append(data)
 
         if len(markers_in_region) % 1000 == 0:
             logger.debug("Added 1000 markers")
@@ -94,46 +99,48 @@ def get_n_markers(parser, keep, n):
 
 def _get_sample_select(samples, keep):
     """Returns a vector of True/False to keep samples."""
-    k = np.ones_like(samples, dtype=bool)
+    to_keep = np.ones_like(samples, dtype=bool)
     if keep is not None:
-        k = np.array([s in keep for s in samples], dtype=bool)
-        if np.sum(k) == 0:
+        to_keep = np.array([s in keep for s in samples], dtype=bool)
+        if np.sum(to_keep) == 0:
             raise ProgramError("No samples matched the keep list")
-    return k
+    return to_keep
 
 
 def _get_genotype_parser(fn, f_format):
     """Retrieves the correct genotype parsers."""
     # Finding the correct parser
-    GenotypesParser = None
+    genotypes_parser = None
+
     if f_format is not None:
-        GenotypesParser = parsers[f_format]
+        genotypes_parser = parsers[f_format]
+
     else:
         # VCF
         if fn.endswith(".vcf") or fn.endswith(".vcf.gz"):
-            GenotypesParser = parsers["vcf"]
+            genotypes_parser = parsers["vcf"]
             f_format = "vcf"
 
         # BGEN
         elif fn.endswith(".bgen"):
-            GenotypesParser = parsers["bgen"]
+            genotypes_parser = parsers["bgen"]
             f_format = "bgen"
 
         # IMPUTE2
         elif fn.endswith(".impute2") or fn.endswith(".impute2.gz"):
-            GenotypesParser = parsers["impute2"]
+            genotypes_parser = parsers["impute2"]
             f_format = "impute2"
 
         # Plink (gave the extension)
         elif fn.endswith(".bed") or fn.endswith(".bim") or fn.endswith(".fam"):
-            GenotypesParser = parsers["plink"]
+            genotypes_parser = parsers["plink"]
             fn = fn[:-4]
             f_format = "plink"
 
         # Plink (gave the prefix)
         elif (path.isfile(fn + ".bed") and path.isfile(fn + ".bim") and
               path.isfile(fn + ".fam")):
-            GenotypesParser = parsers["plink"]
+            genotypes_parser = parsers["plink"]
             f_format = "plink"
 
         else:
@@ -168,4 +175,4 @@ def _get_genotype_parser(fn, f_format):
     elif f_format == "plink":
         parser_options["prefix"] = fn
 
-    return GenotypesParser, parser_options
+    return genotypes_parser, parser_options
