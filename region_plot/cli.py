@@ -23,12 +23,11 @@ from six.moves import range, zip
 
 from gepyto.utils.genes import ensembl_genes_in_region
 
+import matplotlib.pyplot as plt
+
 from . import utils
 from . import __version__
 from .error import ProgramError
-
-# importing matplotlib so that it works even if no X11
-import matplotlib.pyplot as plt
 
 
 def main():
@@ -41,7 +40,7 @@ def main():
 
     """
     # Creating the option parser
-    desc = "Plots significant regions of GWAS.".format(__version__)
+    desc = "Plots significant regions of GWAS ({}).".format(__version__)
     parser = argparse.ArgumentParser(description=desc)
 
     # We run the script
@@ -61,7 +60,7 @@ def main():
                                                  args.log_file), mode="w"),
             ]
         )
-        logging.info("Logging everything into '{}'".format(args.log_file))
+        logging.info("Logging everything into '%s'", args.log_file)
 
         # We start by reading the association results
         assoc = read_assoc(args.assoc, args)
@@ -69,11 +68,32 @@ def main():
         # Getting the best hit
         best_hits = get_best_hits(assoc, args)
 
+        # Reading the samples to keep
+        samples_to_keep = None
+        if args.keep is not None:
+            samples_to_keep = set(args.keep.read().splitlines())
+            logging.info("Keeping {:,d} samples".format(len(samples_to_keep)))
+            args.keep.close()
+
         # For all hits...
         for best_hit, chrom, start, end in zip(*best_hits):
+            # Extracting the region
+            in_region = assoc[args.chr_col] == chrom
+            in_region = in_region & (assoc[args.pos_col] >= start)
+            in_region = in_region & (assoc[args.pos_col] <= end)
+            in_region = assoc.loc[in_region, :]
+
+            # Getting the original name
+            original_name = in_region.loc[best_hit, args.snp_col]
+
             # Computing LD with best hit
-            ld = compute_ld(args.bfile, assoc, best_hit, chrom, start, end,
-                            args)
+            ld_values = compute_ld(
+                genotypes_file=args.genotypes,
+                best_hit=original_name,
+                markers=set(in_region[args.snp_col].values),
+                keep=samples_to_keep,
+                args=args,
+            )
 
             # To read the genetic map, we required the chromosomal position of
             # the best hit
@@ -88,8 +108,8 @@ def main():
                                             args.output_directory)
 
             # Plotting the region
-            plot_region(best_hit, assoc, ld, genetic_map, imputed_sites, chrom,
-                        start, end, gene_list, args)
+            plot_region(in_region, ld_values, genetic_map, imputed_sites,
+                        chrom, start, end, gene_list, args)
 
     # Catching the Ctrl^C
     except KeyboardInterrupt:
@@ -97,15 +117,15 @@ def main():
         sys.exit(0)
 
     # Catching the ProgramError
-    except ProgramError as e:
-        parser.error(e.message)
+    except ProgramError as error:
+        parser.error(error.message)
 
 
 def find_gene_in_region(chrom, start, end, build, out_dir):
     """Finds the gene in the region."""
     region = "{}:{}-{}".format(chrom, start, end)
 
-    logging.info("Fetching genes in region {}".format(region))
+    logging.info("Fetching genes in region %s", region)
     results = ensembl_genes_in_region(region, bare=True, build=build)
 
     logging.info("  - {:,d} genes found".format(len(results)))
@@ -127,41 +147,35 @@ def find_gene_in_region(chrom, start, end, build, out_dir):
     return genes
 
 
-def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
+def plot_region(data, ld_values, genetic_map, imputed_sites, chrom, start, end,
                 genes, options):
     """Plots the genomic region."""
-    # Getting association data only from required region
-    in_region = assoc[options.chr_col] == chrom
-    in_region = in_region & (assoc[options.pos_col] >= start)
-    in_region = in_region & (assoc[options.pos_col] <= end)
-    data = assoc[in_region]
+    logging.info("Plotting the region")
 
     # Merging association data and LD
-    data = pd.merge(data, ld, how="left", left_on=options.snp_col,
-                    right_on="SNP_B")
+    data = data.assign(r2=ld_values)
 
     # Is there NaN values?
-    if data.R2.isnull().any():
-        logging.debug("NaN values in R2 data")
-        data.loc[data.R2.isnull(), "R2"] = 0
-        if data.R2.isnull().any():
-            raise ProgramError("problem with R2 data")
+    is_null = data.r2.isnull()
+    if is_null.any():
+        logging.info("  - {:,d} NaN LD values set to 0 after merge"
+                     "".format(is_null.sum()))
+        data.loc[is_null, "r2"] = 0
+        assert not data.r2.isnull().any()
 
     # Just checking to be sure...
     if len(data[options.chr_col].unique()) > 1:
         raise ProgramError("more than one chromosome: problem with programmer")
 
     # Debug
-    logging.info("Plotting the region")
-    logging.info("  - chr{}:{}-{}".format(data[options.chr_col].unique()[0],
-                                          data[options.pos_col].min(),
-                                          data[options.pos_col].max()))
+    logging.info("  - chr%s:%d-%d", data[options.chr_col].unique()[0],
+                 data[options.pos_col].min(), data[options.pos_col].max())
 
     # The colors
     r_colors = ("#0099CC", "#9933CC", "#669900", "#FF8800", "#CC0000")
     i_r_colors = ("#8AD5F0", "#D6ADEB", "#C5E26D", "#FFD980", "#FF9494")
 
-    # the R2 threshold
+    # The r2 threshold
     r_thresholds = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
 
     # The figure
@@ -224,21 +238,28 @@ def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
     logging.info("    - {:,d} significant markers".format(
         (imputed[options.p_col] < options.significant).sum(),
     ))
+    zorder = 0
     for i in range(1, len(r_thresholds)):
         # Getting the thresholds
-        min_r = r_thresholds[i-1]
+        min_r = r_thresholds[i - 1]
         max_r = r_thresholds[i]
-        color = i_r_colors[i-1]
+        color = i_r_colors[i - 1]
 
         # Plotting the correct threshold
-        sub_data = imputed[(min_r < imputed.R2) & (imputed.R2 <= max_r)]
-        logging.info("    - {:,d} with r2 <= {}".format(len(sub_data), max_r))
+        sub_data = imputed[(min_r < imputed.r2) & (imputed.r2 <= max_r)]
+        logging.info("    - {:,d} with r2 <= {}"
+                     "".format(sub_data.shape[0], max_r))
 
-        if len(sub_data) > 0:
-            assoc_axe.plot(sub_data[options.pos_col] / 1e6,
-                           -np.log10(sub_data[options.p_col]),
-                           "D", mec=color, mfc=color, ms=3, clip_on=False,
-                           label="_nolegend_")
+        if sub_data.shape[0] > 0:
+            assoc_axe.plot(
+                sub_data[options.pos_col] / 1e6,
+                -np.log10(sub_data[options.p_col]),
+                "D", mec=color, mfc=color, ms=3, clip_on=False,
+                label="_nolegend_", zorder=zorder,
+            )
+
+        # Updating the z order
+        zorder += 2
 
     # Plotting the genotyped markers
     genotyped = data[~is_imputed]
@@ -246,21 +267,28 @@ def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
     logging.info("    - {:,d} significant markers".format(
         (genotyped[options.p_col] < options.significant).sum()
     ))
+    zorder = 1
     for i in range(1, len(r_thresholds)):
         # Getting the thresholds
-        min_r = r_thresholds[i-1]
+        min_r = r_thresholds[i - 1]
         max_r = r_thresholds[i]
-        color = r_colors[i-1]
+        color = r_colors[i - 1]
 
         # Plotting the correct threshold
-        sub_data = genotyped[(min_r < genotyped.R2) & (genotyped.R2 <= max_r)]
-        logging.info("    - {:,d} with r2 <= {}".format(len(sub_data), max_r))
+        sub_data = genotyped[(min_r < genotyped.r2) & (genotyped.r2 <= max_r)]
+        logging.info("    - {:,d} with r2 <= {}"
+                     "".format(sub_data.shape[0], max_r))
 
-        if len(sub_data) > 0:
-            assoc_axe.plot(sub_data[options.pos_col] / 1e6,
-                           -np.log10(sub_data[options.p_col]),
-                           ".", mec=color, mfc=color, ms=6, clip_on=False,
-                           label="_nolegend_")
+        if sub_data.shape[0] > 0:
+            assoc_axe.plot(
+                sub_data[options.pos_col] / 1e6,
+                -np.log10(sub_data[options.p_col]),
+                ".", mec=color, mfc=color, ms=6, clip_on=False,
+                label="_nolegend_", zorder=zorder,
+            )
+
+        # Updating the z order
+        zorder += 2
 
     # Adding the significant line
     assoc_axe.axhline(-np.log10(options.significant), ls="--",
@@ -273,9 +301,9 @@ def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
         assoc_axe.plot([], [], ".", mec="#000000", mfc="#000000",
                        label="Genotyped", ms=6)
 
-    # The R2 legend
+    # The r2 legend
     for i, r_color in enumerate(r_colors):
-        # The imputed R2 color
+        # The imputed r2 color
         i_r_color = r_colors[i]
         if len(imputed_sites) > 0:
             i_r_color = i_r_colors[i]
@@ -328,31 +356,33 @@ def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
             j -= 1
 
         # Trying to put the label there
-        t = gene_axe.text((gene_start + gene_end) / 2, j - 0.15, gene_label,
-                          fontsize=5, ha="center", va="top")
+        gene_text = gene_axe.text(
+            (gene_start + gene_end) / 2, j - 0.15, gene_label, fontsize=5,
+            ha="center", va="top",
+        )
 
         # Is there a bbox in this location?
         if j in last_t_obj:
             # Getting the bbox
-            bb = t.get_window_extent(renderer=renderer)
+            bbox = gene_text.get_window_extent(renderer=renderer)
             last_bb = last_t_obj[j].get_window_extent(renderer=renderer)
 
-            while last_bb.overlaps(bb):
+            while last_bb.overlaps(bbox):
                 # BBoxes overlap
-                logging.debug("{} overlaps".format(gene_name))
+                logging.debug("%s overlaps", gene_name)
                 j -= 1
-                t.set_y(j - 0.15)
+                gene_text.set_y(j - 0.15)
 
                 # Last j?
                 if j not in last_t_obj:
                     break
 
                 # Need to update both bboxes
-                bb = t.get_window_extent(renderer=renderer)
+                bbox = gene_text.get_window_extent(renderer=renderer)
                 last_bb = last_t_obj[j].get_window_extent(renderer=renderer)
 
         # Plotting the line
-        logging.debug("Putting {} at position {}".format(gene_name, j))
+        logging.debug("Putting %s at position %d", gene_name, j)
         marker = "-"
         other_param = {}
         if (gene_end - gene_start) < 3e-3:
@@ -364,7 +394,7 @@ def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
 
         # Saving the last position (last end and bbox)
         last_end[j] = gene_end + 3e-3
-        last_t_obj[j] = t
+        last_t_obj[j] = gene_text
 
     # The limits
     recomb_axe.set_ylim(0, 100)
@@ -372,8 +402,8 @@ def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
 
     # The gene limits should at least be lower than -1
     min_y, max_y = gene_axe.get_ylim()
-    if min_y == -1:
-        gene_axe.set_ylim(-1.5, max_y)
+    if min_y >= -1:
+        gene_axe.set_ylim(-1, max_y)
 
     # Setting the ticks below the X axis for genes
     gene_axe.get_xaxis().set_tick_params(direction='out')
@@ -382,7 +412,7 @@ def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
     o_filename = "chr{}_{}-{}.{}".format(chrom, start, end,
                                          options.plot_format)
     o_filename = os.path.join(options.output_directory, o_filename)
-    logging.info("  - saving to '{}'".format(o_filename))
+    logging.info("  - saving to '%s'", o_filename)
     plt.savefig(o_filename, dpi=600, bbox_inches='tight')
     plt.close(fig)
 
@@ -390,12 +420,8 @@ def plot_region(best, assoc, ld, genetic_map, imputed_sites, chrom, start, end,
 def read_assoc(filename, options):
     """Reads the association file."""
     # Reading the assoc file
-    logging.info("Reading assoc file '{}'".format(filename))
-    compression = None
-    if filename.endswith(".gz"):
-        compression = "gzip"
-    data = pd.read_csv(filename, delim_whitespace=True,
-                       compression=compression)
+    logging.info("Reading assoc file '%s'", filename)
+    data = pd.read_csv(filename, delim_whitespace=True)
 
     # Checking the header
     for column in (options.snp_col, options.chr_col, options.pos_col,
@@ -406,8 +432,18 @@ def read_assoc(filename, options):
                                                                column))
 
     # Returning the association data
-    logging.info("  - {:,d} markers".format(len(data)))
-    data.index = data[options.snp_col]
+    logging.info("  - {:,d} markers from association data".format(len(data)))
+
+    # Creating the new index
+    alleles = pd.Series(
+        ["/".join(sorted(alleles)) for alleles in
+         zip(data.loc[:, options.a1_col].values,
+             data.loc[:, options.a2_col].values)],
+        index=data.index,
+    )
+    data = data.set_index(data.loc[:, options.snp_col] + ":" + alleles,
+                          verify_integrity=True)
+
     return data
 
 
@@ -423,18 +459,15 @@ def get_best_hits(assoc, args):
     end = int(pos + args.region_padding)
 
     # Do we want the whole region?
-    logging.debug("region: chr{}:{}-{}".format(chrom, start, end))
+    logging.debug("region: chr%s:%d-%d", chrom, start, end)
     if args.whole_dataset:
         start = int(assoc[assoc[args.chr_col] == chrom].pos.min())
         end = int(assoc[assoc[args.chr_col] == chrom].pos.max())
-        logging.debug("whole region: chr{}:{}-{}".format(chrom, start, end))
+        logging.debug("whole region: chr%s:%d-%d", chrom, start, end)
 
-    logging.info("Best hit is '{}'".format(best_hit))
-    logging.info("  - chr{}:{} (p={})".format(
-        chrom,
-        pos,
-        assoc.loc[best_hit, args.p_col],
-    ))
+    logging.info("Best hit is '%s'", best_hit)
+    logging.info("  - chr%s:%d (p=%.1e)", chrom, pos,
+                 assoc.loc[best_hit, args.p_col])
 
     # Saving in a list
     best_hits = [best_hit]
@@ -467,12 +500,9 @@ def get_best_hits(assoc, args):
         end = int(pos + args.region_padding)
 
         # Logging
-        logging.info("Secondary hit is '{}'".format(best_hit))
-        logging.info("  - chr{}:{} (p={})".format(
-            chrom,
-            pos,
-            sub_data.loc[best_hit, args.p_col],
-        ))
+        logging.info("Secondary hit is '%s'", best_hit)
+        logging.info("  - chr%s:%d (p=%.1e)", chrom, pos,
+                     sub_data.loc[best_hit, args.p_col])
 
         # Saving
         best_hits.append(best_hit)
@@ -491,39 +521,33 @@ def get_best_hits(assoc, args):
     return best_hits, chroms, starts, ends
 
 
-def compute_ld(prefix, assoc, best_hit, chrom, start, end, args):
+def compute_ld(genotypes_file, best_hit, markers, keep, args):
     """Compute LD with the best SNP."""
-    # Computing the LD for the best hit
-    command = [
-        "plink",
-        "--noweb",
-        "--bfile", prefix,
-        "--r2",
-        "--chr", str(chrom),
-        "--from-bp", str(start),
-        "--to-bp", str(end),
-        "--ld-snp", best_hit,
-        "--ld-window-kb", "1000000",
-        "--ld-window", "1000000",
-        "--ld-window-r2", "0",
-        "--out", os.path.join(args.output_directory, best_hit),
-    ]
+    logging.info("Computing LD")
+    logging.info("  - {:,d} markers to fetch".format(len(markers)))
 
-    # Launching the command
-    if utils.execute_command("PLINK: LD with {}".format(best_hit), command):
-        # The task was successful, so we read the LD table
-        filename = os.path.join(
-            args.output_directory, "{}.ld".format(best_hit)
-        )
-        if not os.path.isfile(filename):
-            raise ProgramError("{}: file wasn't produce by "
-                               "plink".format(filename))
+    ld_values = utils.compute_ld(
+        best_hit, genotypes_file, args.genotypes_format, keep, markers
+    )
 
-        logging.info("Reading LD file '{}'".format(filename))
-        ld_data = pd.read_csv(filename, delim_whitespace=True)[["SNP_B", "R2"]]
-        logging.info("  - {:,d} LD values".format(len(ld_data)))
+    # Are there any duplicates?
+    if ld_values.index.has_duplicates:
+        logging.warning("  - duplicated found, keeping only the first "
+                        "occurrence")
 
-        return ld_data
+        # Dropping
+        dups = ld_values.index.duplicated(keep="first")
+        for dup in ld_values.loc[dups].index:
+            logging.warning("    * %s", dup)
+
+        ld_values = ld_values.loc[~dups]
+
+    # Saving the LD data
+    fn = os.path.join(args.output_directory, "{}.ld.csv".format(best_hit))
+    logging.info("  - saving LD values to %s", fn)
+    ld_values.to_csv(fn, header=False)
+
+    return ld_values
 
 
 def read_genetic_map(chrom, start, stop, filename, options):
@@ -532,7 +556,7 @@ def read_genetic_map(chrom, start, stop, filename, options):
     if filename.endswith(".gz"):
         compression = "gzip"
 
-    logging.info("Reading genetic map '{}'".format(filename))
+    logging.info("Reading genetic map '%s'", filename)
     data = pd.read_csv(filename, sep="\t", compression=compression)
 
     # Checking the column
@@ -540,14 +564,15 @@ def read_genetic_map(chrom, start, stop, filename, options):
                    options.genetic_rate_col):
         if column not in data.columns:
             logging.debug(data.columns)
-            raise ProgramError("{}: no column named {}".format(filename,
-                                                               column))
+            raise ProgramError(
+                "{}: no column named {}".format(filename, column),
+            )
 
     # Sub-setting the data to get a region of X base pair on each side of the
     # hit
-    region = data["Chromosome"] == chrom
-    region = region & (data["Position(bp)"] >= start)
-    region = region & (data["Position(bp)"] <= stop)
+    region = data[options.genetic_chr_col] == chrom
+    region = region & (data[options.genetic_pos_col] >= start)
+    region = region & (data[options.genetic_pos_col] <= stop)
     data = data[region]
 
     logging.info("  - {:,d} data points".format(len(data)))
@@ -560,7 +585,7 @@ def read_imputed_sites(filename):
         logging.info("No imputed sites specified")
         return {}
 
-    logging.info("Reading imputed sites '{}'".format(filename))
+    logging.info("Reading imputed sites '%s'", filename)
 
     data = None
     with open(filename, "r") as i_file:
@@ -577,11 +602,6 @@ def check_args(args):
     # The association file
     if not os.path.isfile(args.assoc):
         raise ProgramError("{}: no such file".format(args.assoc))
-
-    # The binary PEDFILE
-    for suffix in (".bed", ".bim", ".fam"):
-        if not os.path.isfile(args.bfile + suffix):
-            raise ProgramError("{}: no such file".format(args.bfile + suffix))
 
     # Checking the genetic map
     if not os.path.isfile(args.genetic_map):
@@ -609,165 +629,134 @@ def check_args(args):
 def parse_args(parser):
     """Parses the command line options and arguments."""
     parser.add_argument(
-        "-v",
-        "--version",
-        action="version",
+        "-v", "--version", action="version",
         version="%(prog)s {}".format(__version__),
     )
     parser.add_argument(
-        "--log-level",
-        type=str,
-        choices=("INFO", "DEBUG"),
-        default="INFO",
-        help="The logging level [%(default)s]",
+        "--log-level", type=str, choices=("INFO", "DEBUG"), default="INFO",
+        help="The logging level. [%(default)s]",
     )
     parser.add_argument(
-        "--log-file",
-        type=str,
-        metavar="LOGFILE",
-        default="region-plot.log",
-        help="The log file [%(default)s]",
+        "--log-file", type=str, metavar="LOGFILE", default="region-plot.log",
+        help="The log file. [%(default)s]",
     )
 
     # The input files
     group = parser.add_argument_group("Input Files")
     group.add_argument(
-        "--assoc",
-        type=str,
-        metavar="FILE",
-        required=True,
-        help="The association file containing the hits",
+        "--assoc", type=str, metavar="FILE", required=True,
+        help="The association file containing the hits.",
     )
     group.add_argument(
-        "--bfile",
-        type=str,
-        metavar="PREFIX",
-        required=True,
-        help="The prefix of the binary PEDFILE to compute LD with best hit",
+        "--genotypes", type=str, metavar="FILE", required=True,
+        help="The file containing the genotypes (available format are VCF, "
+             "IMPUTE2, BGEN or Plink binary files.",
     )
     group.add_argument(
-        "--imputed-sites",
-        type=str,
-        metavar="FILE",
+        "--imputed-sites", type=str, metavar="FILE",
         help="The file containing the imputed sites (if absent, all points "
-             "will have the same darkness)",
+             "will have the same darkness).",
+    )
+
+    # The genotypes options
+    group = parser.add_argument_group("Genotypes Options")
+    group.add_argument(
+        "--genotypes-format", type=str, metavar="FORMAT",
+        choices={"vcf", "impute2", "plink", "bgen"},
+        help="The genotype file format. If not specified, the tool will try "
+             "to guess the format and parse the file accordingly.",
+    )
+    group.add_argument(
+        "--keep", type=argparse.FileType("r"), metavar="FILE",
+        help="The list of samples to keep for the LD calculation.",
     )
 
     # The association option
     group = parser.add_argument_group("Association Options")
     group.add_argument(
-        "--significant",
-        type=float,
-        metavar="FLOAT",
-        default=5e-8,
-        help="The significant association threshold [<%(default)e]",
+        "--significant", type=float, metavar="FLOAT", default=5e-8,
+        help="The significant association threshold. [<%(default)e]",
     )
     group.add_argument(
-        "--plot-p-lower",
-        type=float,
-        metavar="FLOAT",
-        default=5e-8,
-        help="Plot markers with p lower than value [<%(default)e]",
+        "--plot-p-lower", type=float, metavar="FLOAT", default=5e-8,
+        help="Plot markers with p lower than value. [<%(default)e]",
     )
     group.add_argument(
-        "--snp-col",
-        type=str,
-        metavar="COL",
-        default="snp",
-        help="The name of the SNP column [%(default)s]",
+        "--snp-col", type=str, metavar="COL", default="snp",
+        help="The name of the SNP column. [%(default)s]",
     )
     group.add_argument(
-        "--chr-col",
-        type=str,
-        metavar="COL",
-        default="chr",
-        help="The name of the chromosome column [%(default)s]",
+        "--chr-col", type=str, metavar="COL", default="chr",
+        help="The name of the chromosome column. [%(default)s]",
     )
     group.add_argument(
-        "--pos-col",
-        type=str,
-        metavar="COL",
-        default="pos",
-        help="The name of the pos column [%(default)s]",
+        "--pos-col", type=str, metavar="COL", default="pos",
+        help="The name of the pos column. [%(default)s]",
     )
     group.add_argument(
-        "--p-col",
-        type=str,
-        metavar="COL",
-        default="p",
-        help="The name of the p-value column [%(default)s]",
+        "--p-col", type=str, metavar="COL", default="p",
+        help="The name of the p-value column. [%(default)s]",
+    )
+    group.add_argument(
+        "--a1-col", type=str, metavar="ALLELE", default="minor",
+        help="The name of the column containing the first allele. "
+             "[%(default)s]",
+    )
+    group.add_argument(
+        "--a2-col", type=str, metavar="ALLELE", default="major",
+        help="The name of the column containing the second allele. "
+             "[%(default)s]",
     )
 
     # The genetic map option
     group = parser.add_argument_group("Genetic Map Options")
     group.add_argument(
-        "--genetic-map",
-        type=str,
-        metavar="FILE",
-        required=True,
-        help="The file containing the genetic map",
+        "--genetic-map", type=str, metavar="FILE", required=True,
+        help="The file containing the genetic map.",
     )
     group.add_argument(
-        "--genetic-chr-col",
-        type=str,
-        metavar="COL",
-        default="chromosome",
-        help="The name of chromosome column for the genetic map [%(default)s]",
-    )
-    group.add_argument(
-        "--genetic-pos-col",
-        type=str,
-        metavar="COL",
-        default="position",
-        help="The name of the position column for the genetic map "
+        "--genetic-chr-col", type=str, metavar="COL", default="chromosome",
+        help="The name of chromosome column for the genetic map. "
              "[%(default)s]",
     )
     group.add_argument(
-        "--genetic-rate-col",
-        type=str,
-        metavar="COL",
-        default="rate",
-        help="The name of the recombination rate column for the genetic map "
+        "--genetic-pos-col", type=str, metavar="COL", default="position",
+        help="The name of the position column for the genetic map. "
+             "[%(default)s]",
+    )
+    group.add_argument(
+        "--genetic-rate-col", type=str, metavar="COL", default="rate",
+        help="The name of the recombination rate column for the genetic map. "
              "[%(default)s]",
     )
 
     # The plot options
     group = parser.add_argument_group("Plot Options")
     group.add_argument(
-        "--plot-format",
-        type=str,
-        choices={"png", "pdf"},
-        default="png",
+        "--plot-format", type=str, choices={"png", "pdf"}, default="png",
         help="The format of the output file containing the plot (might be "
-             "'png' or 'pdf') [%(default)s]",
+             "'png' or 'pdf'). [%(default)s]",
     )
     group.add_argument(
-        "--build",
-        type=str,
-        choices=("GRCh37", "GRCh38"),
-        default="GRCh37",
-        help="The build to search the overlapping genes [%(default)s]",
+        "--build", type=str, choices=("GRCh37", "GRCh38"), default="GRCh37",
+        help="The build to search the overlapping genes. [%(default)s]",
     )
     group.add_argument(
-        "--region-padding",
-        type=float,
-        metavar="FLOAT",
-        default=500e3,
+        "--region-padding", type=float, metavar="FLOAT", default=500e3,
         help="The amount of base pairs to pad the region (on each side of the "
-             "best hit [%(default).1f]",
+             "best hit. [%(default).1f]",
     )
     group.add_argument(
-        "--whole-dataset",
-        action="store_true",
+        "--whole-dataset", action="store_true",
         help="Plot all markers (no padding) (WARNING this might take a lot of "
-             "memory)",
+             "memory).",
     )
 
     # The output options
     group = parser.add_argument_group("Output Options")
     group.add_argument(
         "--output-directory", metavar="DIR", default=".",
-        help="The output directory [%(default)s]",
+        help="The output directory. [%(default)s]",
     )
 
     return parser.parse_args()

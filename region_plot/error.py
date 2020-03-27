@@ -1,3 +1,4 @@
+"""Exception specific to this tool."""
 
 # This file is part of region-plot.
 #
