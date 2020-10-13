@@ -12,7 +12,7 @@ from setuptools import setup
 
 MAJOR = 0
 MINOR = 1
-MICRO = 3
+MICRO = 4
 VERSION = "{}.{}.{}".format(MAJOR, MINOR, MICRO)
 
 
