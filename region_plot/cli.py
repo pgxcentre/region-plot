@@ -461,8 +461,8 @@ def get_best_hits(assoc, args):
     # Do we want the whole region?
     logging.debug("region: chr%s:%d-%d", chrom, start, end)
     if args.whole_dataset:
-        start = int(assoc[assoc[args.chr_col] == chrom].pos.min())
-        end = int(assoc[assoc[args.chr_col] == chrom].pos.max())
+        start = int(assoc[assoc[args.chr_col] == chrom][args.pos_col].min())
+        end = int(assoc[assoc[args.chr_col] == chrom][args.pos_col].max())
         logging.debug("whole region: chr%s:%d-%d", chrom, start, end)
 
     logging.info("Best hit is '%s'", best_hit)
