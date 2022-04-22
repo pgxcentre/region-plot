@@ -8,6 +8,8 @@
 # Commons, PO Box 1866, Mountain View, CA 94042, USA.
 
 
+import contextlib
+import json
 import re
 import logging
 from os import path
@@ -20,6 +22,13 @@ from geneparse import parsers, Extractor
 from geneparse.utils import compute_ld as geneparse_ld
 
 from .error import ProgramError
+
+try:
+    # Python 2 support
+    from urllib2 import urlopen
+except ImportError:
+    # Python 3 support
+    from urllib.request import urlopen
 
 
 logger = logging.getLogger(__name__)
@@ -176,3 +185,24 @@ def _get_genotype_parser(fn, f_format):
         parser_options["prefix"] = fn
 
     return genotypes_parser, parser_options
+
+
+def ensembl_genes_in_region(region, species, build):
+    """Get the genes in the specific regions for the species (with build)."""
+    url = (
+        "rest.ensembl.org/overlap/region/{species}/{region}"
+        "?feature=gene"
+        "&content-type=application/json"
+    ).format(species=species, region=region)
+
+    homo_sapiens = {"homo_sapiens", "hsap", "homsap", "h_sapiens", "9606",
+                    "human", "enshs", "hsapiens", "homo"}
+    if species in homo_sapiens and build == "GRCh37":
+        url = "https://grch37." + url
+    else:
+        url = "https://" + url
+
+    with contextlib.closing(urlopen(url)) as stream:
+        response = json.loads(stream.read().decode())
+
+    return response

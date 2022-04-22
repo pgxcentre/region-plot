@@ -21,8 +21,6 @@ import pandas as pd
 
 from six.moves import range, zip
 
-from gepyto.utils.genes import ensembl_genes_in_region
-
 import matplotlib.pyplot as plt
 
 from . import utils
@@ -104,8 +102,10 @@ def main():
             imputed_sites = read_imputed_sites(args.imputed_sites)
 
             # Getting the gene from the region
-            gene_list = find_gene_in_region(chrom, start, end, args.build,
-                                            args.output_directory)
+            gene_list = find_gene_in_region(
+                chrom, start, end, args.species, args.build,
+                args.output_directory,
+            )
 
             # Plotting the region
             plot_region(in_region, ld_values, genetic_map, imputed_sites,
@@ -121,20 +121,30 @@ def main():
         parser.error(error.message)
 
 
-def find_gene_in_region(chrom, start, end, build, out_dir):
+def find_gene_in_region(chrom, start, end, species, build, out_dir):
     """Finds the gene in the region."""
     region = "{}:{}-{}".format(chrom, start, end)
 
     logging.info("Fetching genes in region %s", region)
-    results = ensembl_genes_in_region(region, bare=True, build=build)
+    results = utils.ensembl_genes_in_region(region, species, build=build)
 
     logging.info("  - {:,d} genes found".format(len(results)))
 
     # Creating a DataFrame from the list of genes
     genes = []
     for gene in results:
-        genes.append((gene.symbol, gene.start, gene.end, gene.strand,
-                      gene.biotype))
+        # Getting the 'symbol'
+        symbol = gene["gene_id"]
+        if "external_name" in gene:
+            symbol = gene["external_name"]
+
+        genes.append((
+            symbol,
+            gene["start"],
+            gene["end"],
+            gene["strand"],
+            gene["biotype"],
+        ))
     genes = pd.DataFrame(genes, columns=["symbol", "start", "end", "strand",
                                          "biotype"])
 
@@ -650,7 +660,7 @@ def parse_args(parser):
     group.add_argument(
         "--genotypes", type=str, metavar="FILE", required=True,
         help="The file containing the genotypes (available format are VCF, "
-             "IMPUTE2, BGEN or Plink binary files.",
+             "IMPUTE2, BGEN or Plink binary files).",
     )
     group.add_argument(
         "--imputed-sites", type=str, metavar="FILE",
@@ -738,8 +748,13 @@ def parse_args(parser):
              "'png' or 'pdf'). [%(default)s]",
     )
     group.add_argument(
+        "--species", type=str, default="homo_sapiens",
+        help="The species to search genes for. [%(default)s]",
+    )
+    group.add_argument(
         "--build", type=str, choices=("GRCh37", "GRCh38"), default="GRCh37",
-        help="The build to search the overlapping genes. [%(default)s]",
+        help="The build to search the overlapping genes (only available for "
+             "humans). [%(default)s]",
     )
     group.add_argument(
         "--region-padding", type=float, metavar="FLOAT", default=500e3,
