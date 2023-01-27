@@ -75,6 +75,14 @@ def main():
             logging.info("Keeping {:,d} samples".format(len(samples_to_keep)))
             args.keep.close()
 
+        # Reading the annotations if provided.
+        if args.annotation_gtf is not None:
+            annotation_gtf = utils.GTFFile(args.annotation_gtf)
+            annotation_labels = args.annotation_label
+        else:
+            annotation_gtf = None
+            annotation_labels = None
+
         # For all hits...
         for best_hit, chrom, start, end in zip(*best_hits):
             # Extracting the region
@@ -104,12 +112,18 @@ def main():
             imputed_sites = read_imputed_sites(args.imputed_sites)
 
             # Getting the gene from the region
-            gene_list = find_gene_in_region(chrom, start, end, args.build,
-                                            args.output_directory)
+            if annotation_gtf is None:
+                annotation_list = find_gene_in_region(
+                    chrom, start, end, args.build, args.output_directory
+                )
+            else:
+                annotation_list = annotation_gtf.get_annotations_in_region(
+                    chrom, start, end, annotation_labels
+                )
 
             # Plotting the region
             plot_region(in_region, ld_values, genetic_map, imputed_sites,
-                        chrom, start, end, gene_list, args)
+                        chrom, start, end, annotation_list, args)
 
     # Catching the Ctrl^C
     except KeyboardInterrupt:
@@ -133,14 +147,13 @@ def find_gene_in_region(chrom, start, end, build, out_dir):
     # Creating a DataFrame from the list of genes
     genes = []
     for gene in results:
-        genes.append((gene.symbol, gene.start, gene.end, gene.strand,
-                      gene.biotype))
-    genes = pd.DataFrame(genes, columns=["symbol", "start", "end", "strand",
-                                         "biotype"])
+        genes.append((gene.start, gene.end, gene.strand, gene.symbol))
+
+    genes = pd.DataFrame(genes, columns=["start", "end", "strand", "label"])
 
     # Saving the gene list
     fn = os.path.join(
-        out_dir, "genes_in_chr{}_{}_{}.txt".format(chrom, start, end),
+        out_dir, "annotations_in_chr{}_{}_{}.txt".format(chrom, start, end),
     )
     genes.to_csv(fn, sep="\t", index=False)
 
@@ -148,7 +161,7 @@ def find_gene_in_region(chrom, start, end, build, out_dir):
 
 
 def plot_region(data, ld_values, genetic_map, imputed_sites, chrom, start, end,
-                genes, options):
+                annotations, options):
     """Plots the genomic region."""
     logging.info("Plotting the region")
 
@@ -183,7 +196,7 @@ def plot_region(data, ld_values, genetic_map, imputed_sites, chrom, start, end,
 
     # The axes
     recomb_axe = plt.subplot2grid((4, 1), (0, 0), rowspan=3)
-    gene_axe = plt.subplot2grid((4, 1), (3, 0), sharex=recomb_axe)
+    annotation_axe = plt.subplot2grid((4, 1), (3, 0), sharex=recomb_axe)
     assoc_axe = recomb_axe.twinx()
 
     # Setting the recombination axe parameters
@@ -206,22 +219,22 @@ def plot_region(data, ld_values, genetic_map, imputed_sites, chrom, start, end,
     assoc_axe.yaxis.set_label_position("left")
 
     # Setting the gene axe parameters
-    gene_axe.xaxis.set_ticks_position("bottom")
-    gene_axe.yaxis.set_ticks_position("none")
-    gene_axe.spines["top"].set_visible(False)
-    gene_axe.spines["left"].set_visible(False)
-    gene_axe.spines["bottom"].set_position(("outward", 9))
-    gene_axe.spines["right"].set_visible(False)
-    gene_axe.axes.get_yaxis().set_visible(False)
+    annotation_axe.xaxis.set_ticks_position("bottom")
+    annotation_axe.yaxis.set_ticks_position("none")
+    annotation_axe.spines["top"].set_visible(False)
+    annotation_axe.spines["left"].set_visible(False)
+    annotation_axe.spines["bottom"].set_position(("outward", 9))
+    annotation_axe.spines["right"].set_visible(False)
+    annotation_axe.axes.get_yaxis().set_visible(False)
 
     # The size of the tick labels
     assoc_axe.tick_params(axis='both', which='major', labelsize=8)
     recomb_axe.tick_params(axis="both", which="major", labelsize=8)
-    gene_axe.tick_params(axis="both", which="major", labelsize=8)
+    annotation_axe.tick_params(axis="both", which="major", labelsize=8)
 
     # The title and labels of the figure
-    gene_axe.set_xlabel("Position on chr{} (Mb)".format(chrom), fontsize=10,
-                        weight="normal")
+    annotation_axe.set_xlabel("Position on chr{} (Mb)".format(chrom),
+                              fontsize=10, weight="normal")
     assoc_axe.set_ylabel(r"$-\log_{10}(p)$", fontsize=10)
     recomb_axe.set_ylabel("Recombination Rate (cM/Mb)", fontsize=10,
                           weight="normal", rotation=270, va="bottom")
@@ -316,8 +329,8 @@ def plot_region(data, ld_values, genetic_map, imputed_sites, chrom, start, end,
     assoc_axe.legend(loc="best", fontsize=6, ncol=1, numpoints=1,
                      markerscale=1)
 
-    # Sorting the genes
-    genes = genes.sort_values(by=["start", "end"])
+    # Sorting the annotations
+    annotations = annotations.sort_values(by=["start", "end"])
 
     # Getting the figure renderer
     renderer = fig.canvas.get_renderer()
@@ -326,87 +339,89 @@ def plot_region(data, ld_values, genetic_map, imputed_sites, chrom, start, end,
     last_t_obj = {}
     last_end = defaultdict(int)
 
-    for i in range(genes.shape[0]):
-        gene_start = genes.iloc[i, :].start
-        gene_end = genes.iloc[i, :].end
-        gene_name = genes.iloc[i, :].symbol
+    for i in range(annotations.shape[0]):
+        ann_start = annotations.iloc[i, :].start
+        ann_end = annotations.iloc[i, :].end
+        ann_label = annotations.iloc[i, :].label
 
         # Checking the starting position of the gene
-        if gene_start < start:
-            gene_start = start
-        gene_start /= 1e6
+        if ann_start < start:
+            ann_start = start
+        ann_start /= 1e6
 
         # Checking the ending position of the gene
-        if gene_end > end:
-            gene_end = end
-        gene_end /= 1e6
+        if ann_end > end:
+            ann_end = end
+        ann_end /= 1e6
 
         # Updating the gene label
-        gene_label = None
-        if genes.iloc[i, :].strand == 1:
-            gene_label = gene_name + r"$\rightarrow$"
+        strand = annotations.iloc[i, :].strand
+        if strand == 1 or strand == "+":
+            ann_label = ann_label + r"$\rightarrow$"
         else:
-            gene_label = r"$\leftarrow$" + gene_name
+            ann_label = r"$\leftarrow$" + ann_label
 
         # We find the first j where we can put the line
         j = 0
         while True:
-            if last_end[j] < gene_start:
+            if last_end[j] < ann_start:
                 break
             j -= 1
 
         # Trying to put the label there
-        gene_text = gene_axe.text(
-            (gene_start + gene_end) / 2, j - 0.15, gene_label, fontsize=5,
+        ann_text = annotation_axe.text(
+            (ann_start + ann_end) / 2, j - 0.15, ann_label, fontsize=5,
             ha="center", va="top",
         )
 
         # Is there a bbox in this location?
         if j in last_t_obj:
             # Getting the bbox
-            bbox = gene_text.get_window_extent(renderer=renderer)
+            bbox = ann_text.get_window_extent(renderer=renderer)
             last_bb = last_t_obj[j].get_window_extent(renderer=renderer)
 
             while last_bb.overlaps(bbox):
                 # BBoxes overlap
-                logging.debug("%s overlaps", gene_name)
+                logging.debug("%s overlaps", ann_label)
                 j -= 1
-                gene_text.set_y(j - 0.15)
+                ann_text.set_y(j - 0.15)
 
                 # Last j?
                 if j not in last_t_obj:
                     break
 
                 # Need to update both bboxes
-                bbox = gene_text.get_window_extent(renderer=renderer)
+                bbox = ann_text.get_window_extent(renderer=renderer)
                 last_bb = last_t_obj[j].get_window_extent(renderer=renderer)
 
         # Plotting the line
-        logging.debug("Putting %s at position %d", gene_name, j)
+        logging.debug("Putting %s at position %d", ann_label, j)
         marker = "-"
         other_param = {}
-        if (gene_end - gene_start) < 3e-3:
+        if (ann_end - ann_start) < 3e-3:
             # Too small
             marker = "s"
             other_param["ms"] = 1.8
-        gene_axe.plot([gene_start, gene_end], [j, j], marker, lw=2,
-                      color="#000000", clip_on=False, **other_param)
+        annotation_axe.plot(
+            [ann_start, ann_end], [j, j], marker, lw=2,
+            color="#000000", clip_on=False, **other_param
+        )
 
         # Saving the last position (last end and bbox)
-        last_end[j] = gene_end + 3e-3
-        last_t_obj[j] = gene_text
+        last_end[j] = ann_end + 3e-3
+        last_t_obj[j] = ann_text
 
     # The limits
     recomb_axe.set_ylim(0, 100)
     recomb_axe.set_xlim(start/1e6, end/1e6)
 
     # The gene limits should at least be lower than -1
-    min_y, max_y = gene_axe.get_ylim()
+    min_y, max_y = annotation_axe.get_ylim()
     if min_y >= -1:
-        gene_axe.set_ylim(-1, max_y)
+        annotation_axe.set_ylim(-1, max_y)
 
     # Setting the ticks below the X axis for genes
-    gene_axe.get_xaxis().set_tick_params(direction='out')
+    annotation_axe.get_xaxis().set_tick_params(direction='out')
 
     # Saving the figure
     o_filename = "chr{}_{}-{}.{}".format(chrom, start, end,
@@ -656,6 +671,20 @@ def parse_args(parser):
         "--imputed-sites", type=str, metavar="FILE",
         help="The file containing the imputed sites (if absent, all points "
              "will have the same darkness).",
+    )
+    group.add_argument(
+        "--annotation-gtf", type=str, metavar="FILE",
+        help="A GTF file containing annotations."
+    )
+
+    # Annotation file options.
+    group = parser.add_argument_group("Annotation Options")
+    group.add_argument(
+        "--annotation-label", type=str, metavar="LABEL",
+        nargs="+", default=["gene_name", "gene_id", "transcript_id",
+                            "exon_number"],
+        help="Labels from the GTF file attributes that will be used as a "
+             "label in order of preference."
     )
 
     # The genotypes options

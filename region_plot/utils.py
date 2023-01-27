@@ -25,6 +25,77 @@ from .error import ProgramError
 logger = logging.getLogger(__name__)
 
 
+class GTFFile(object):
+    """Reads a GTF File and allows region based queries.
+
+    Example:
+
+    gtf = GTFFile("Homo_sapiens.GRCh37.87.genes_only.gtf.gz")
+    gtf.get_annotations_in_region("16", 56995762, 56995762+5,
+                                  ["gene_name", "gene_id"])
+
+    """
+    def __init__(self, filename):
+        self.df = pd.read_csv(
+            filename,
+            comment="#",
+            names=["seqname", "source", "feature", "start", "end", "score",
+                   "strand", "frame", "attribute"],
+            sep="\t",
+            dtype={"seqname": str, "start": int, "end": int}
+        )
+
+    def get_features_in_region(self, chrom, start, end):
+        """Does raw indexing in the underlying GTF file to get annotations."""
+        chrom = str(chrom)
+
+        df = self.df
+
+        matching_annotations = df.loc[
+            (df.seqname == chrom) &
+            (((df.start >= start) & (df.start <= end) |
+             ((df.end >= start) & (df.end <= end)))), :
+        ]
+
+        return matching_annotations
+
+    def get_annotations_in_region(self, chrom, start, end, preferred_labels):
+        """Gets the annotation in the format expected by region-plot."""
+        features = self.get_features_in_region(chrom, start, end)
+
+        # Parse the features to return a DF with:
+        # start, end, strand, label
+        annotations = []
+        for _, row in features.iterrows():
+            # Parse GTF attributes.
+            attributes = {}
+            for attr in row.attribute.strip().split(";"):
+                if not attr:
+                    continue
+
+                splitted = attr.strip().split()
+                key = splitted[0]
+                value = " ".join(splitted[1:]).strip('"')
+                attributes[key] = value
+
+            # Try to find a label in the provided preferred labels.
+            label = None
+            for try_label in preferred_labels:
+                if try_label in attributes:
+                    label = attributes[try_label]
+                    break
+
+            if label is None:
+                label = "Annotation"
+
+            annotations.append((row.start, row.end, row.strand, label))
+
+        return pd.DataFrame(
+            annotations,
+            columns=["start", "end", "strand", "label"]
+        )
+
+
 def compute_ld(best, fn, f_format, samples_to_keep, extract):
     """Compute the LD."""
     # The r2 values

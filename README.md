@@ -32,19 +32,14 @@ command).
 
 ```console
 $ launch-region-plot --help
-usage: launch-region-plot [-h] [-v] [--log-level {INFO,DEBUG}]
-                          [--log-file LOGFILE] --assoc FILE --genotypes FILE
-                          [--imputed-sites FILE] [--genotypes-format FORMAT]
-                          [--keep FILE] [--significant FLOAT]
-                          [--plot-p-lower FLOAT] [--snp-col COL]
-                          [--chr-col COL] [--pos-col COL] [--p-col COL]
-                          [--a1-col ALLELE] [--a2-col ALLELE] --genetic-map
-                          FILE [--genetic-chr-col COL] [--genetic-pos-col COL]
-                          [--genetic-rate-col COL] [--plot-format {png,pdf}]
-                          [--build {GRCh37,GRCh38}] [--region-padding FLOAT]
-                          [--whole-dataset] [--output-directory DIR]
+usage: launch-region-plot [-h] [-v] [--log-level {INFO,DEBUG}] [--log-file LOGFILE] --assoc FILE --genotypes FILE
+                          [--imputed-sites FILE] [--annotation-gtf FILE] [--annotation-label LABEL [LABEL ...]]
+                          [--genotypes-format FORMAT] [--keep FILE] [--significant FLOAT] [--plot-p-lower FLOAT] [--snp-col COL]
+                          [--chr-col COL] [--pos-col COL] [--p-col COL] [--a1-col ALLELE] [--a2-col ALLELE] --genetic-map FILE
+                          [--genetic-chr-col COL] [--genetic-pos-col COL] [--genetic-rate-col COL] [--plot-format {png,pdf}]
+                          [--build {GRCh37,GRCh38}] [--region-padding FLOAT] [--whole-dataset] [--output-directory DIR]
 
-Plots significant regions of GWAS (0.1.3).
+Plots significant regions of GWAS (0.1.4).
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -55,15 +50,18 @@ optional arguments:
 
 Input Files:
   --assoc FILE          The association file containing the hits.
-  --genotypes FILE      The file containing the genotypes (available format
-                        are VCF, IMPUTE2, BGEN or Plink binary files.
-  --imputed-sites FILE  The file containing the imputed sites (if absent, all
-                        points will have the same darkness).
+  --genotypes FILE      The file containing the genotypes (available format are VCF, IMPUTE2, BGEN or Plink binary files.
+  --imputed-sites FILE  The file containing the imputed sites (if absent, all points will have the same darkness).
+  --annotation-gtf FILE
+                        A GTF file containing annotations.
+
+Annotation Options:
+  --annotation-label LABEL [LABEL ...]
+                        Labels from the GTF file attributes that will be used as a label in order of preference.
 
 Genotypes Options:
   --genotypes-format FORMAT
-                        The genotype file format. If not specified, the tool
-                        will try to guess the format and parse the file
+                        The genotype file format. If not specified, the tool will try to guess the format and parse the file
                         accordingly.
   --keep FILE           The list of samples to keep for the LD calculation.
 
@@ -74,34 +72,26 @@ Association Options:
   --chr-col COL         The name of the chromosome column. [chr]
   --pos-col COL         The name of the pos column. [pos]
   --p-col COL           The name of the p-value column. [p]
-  --a1-col ALLELE       The name of the column containing the first allele.
-                        [minor]
-  --a2-col ALLELE       The name of the column containing the second allele.
-                        [major]
+  --a1-col ALLELE       The name of the column containing the first allele. [minor]
+  --a2-col ALLELE       The name of the column containing the second allele. [major]
 
 Genetic Map Options:
   --genetic-map FILE    The file containing the genetic map.
   --genetic-chr-col COL
-                        The name of chromosome column for the genetic map.
-                        [chromosome]
+                        The name of chromosome column for the genetic map. [chromosome]
   --genetic-pos-col COL
-                        The name of the position column for the genetic map.
-                        [position]
+                        The name of the position column for the genetic map. [position]
   --genetic-rate-col COL
-                        The name of the recombination rate column for the
-                        genetic map. [rate]
+                        The name of the recombination rate column for the genetic map. [rate]
 
 Plot Options:
   --plot-format {png,pdf}
-                        The format of the output file containing the plot
-                        (might be 'png' or 'pdf'). [png]
+                        The format of the output file containing the plot (might be 'png' or 'pdf'). [png]
   --build {GRCh37,GRCh38}
                         The build to search the overlapping genes. [GRCh37]
   --region-padding FLOAT
-                        The amount of base pairs to pad the region (on each
-                        side of the best hit. [500000.0]
-  --whole-dataset       Plot all markers (no padding) (WARNING this might take
-                        a lot of memory).
+                        The amount of base pairs to pad the region (on each side of the best hit. [500000.0]
+  --whole-dataset       Plot all markers (no padding) (WARNING this might take a lot of memory).
 
 Output Options:
   --output-directory DIR
